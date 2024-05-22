@@ -14,23 +14,28 @@ subplot(1,2,2);
 imshow(uint8(img_noise));
 title("noise");
 
+DenoisedImg = zeros(size(img_noise));
+
 %% 设置参数
 ds = 2; %领域半径
-Ds = 2; %滑动窗口大小
+Ds = 5; %滑动窗口半径
+h=10; %NLM公式中的h
+h2=h*h;
 
 %% 扩充图片
-img = [1 2 3 4 5;6 7 8 9 10; 11 12 13 14 15;16 17 18 19 20;21 22 23 24 25];
-
-img_expand = padarray(img,[ds+Ds,ds+Ds],'symmetric','both');
-
+img_expand = padarray(img_double,[ds+Ds,ds+Ds],'symmetric','both');
 
 %% NLM
 for i = 1:height
     for j =1:width
+        num=0;
         i1=i+ds+Ds;
-        j1=j+ds+Ds;
-        W1=img_expand(i1-ds:i1+ds,j1-ds:j1+ds);  % current window
+        j1=j+ds+Ds; %注意，此时i1和j1指向了expand图像中的原始图像
+        W1=img_expand(i1-ds:i1+ds,j1-ds:j1+ds);  % 获取当前点以ds为半径的一圈图像，加上自己的话，图像大小为5x5
         fprintf('=======current point: (%d, %d)\n', i, j);
+        wmax=0;
+        average=0;
+        sweight=0;
 
         swmin = i1 - Ds;
         swmax = i1 + Ds;
@@ -42,9 +47,24 @@ for i = 1:height
                 if(r==i1 && s==j1)
                     continue;
                 end
-                W2 = img_expand(r-ds:r+ds,s-ds:s+ds); % the window is to be compared with current window
-
+            W2 = img_expand(r-ds:r+ds,s-ds:s+ds); % the window is to be compared with current window
+            num = num+1;
+            Dist2 = sum(sum(sqrt((W1-W2).*(W1-W2)))); %计算l2范数，本质上就是各个元素的平方之和再开根号
+            w = exp(-Dist2/h2);   % the weight of the compared window
+            if(w > wmax)
+                wmax = w;
+            end
+            sweight = sweight + w;  % 权重求和，计算Z
+            average = average + w*img_expand(r,s);
             end
         end
+
+        fprintf('num of win: %d\n', num);
+        average = average + wmax*img_expand(i1,j1); %之前的点+最大值赋值给当前权重
+        sweight = sweight+wmax;
+        DenoisedImg(i,j) = average/sweight; %归一化
     end
 end
+
+figure();
+imshow(uint8(DenoisedImg));
